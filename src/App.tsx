@@ -27,9 +27,9 @@ const App: React.FC = () => {
   const [currentSongIndex, setCurrentSongIndex] = useState(0);
 
   const playlist = [
-    { src: 'background-music(overmydeadbody).mp3', title: 'Over My Dead Body' },
-    { src: 'background-music(fashionkilla).mp3', title: 'Fashion Killa' },
-    { src: 'background-music(ribs).mp3', title: 'Ribs' },
+    { src: '/background-music(overmydeadbody).mp3', title: 'Over My Dead Body' },
+    { src: '/background-music(fashionkilla).mp3', title: 'Fashion Killa' },
+    { src: '/background-music(ribs).mp3', title: 'Ribs' },
   ];
 
   // Function to shuffle the playlist
@@ -46,9 +46,16 @@ const App: React.FC = () => {
     shufflePlaylist(playlist);
     if (audioRef.current) {
       audioRef.current.volume = volume; // Set initial volume to 25%
-      audioRef.current.play(); // Automatically play the music
+      audioRef.current.play().catch(() => setIsPlaying(false)); // Attempt to autoplay
     }
   }, []);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+      audioRef.current.play().catch(() => setIsPlaying(false));
+    }
+  }, [currentSongIndex]);
 
   const togglePlayPause = () => {
     if (audioRef.current) {
@@ -130,7 +137,10 @@ const App: React.FC = () => {
 };
 
 const ProtectedDashboard = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) {
+    return null;
+  }
   return user ? <Dashboard /> : <Navigate to="/login" />;
 };
 

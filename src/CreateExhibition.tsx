@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import './Exhibitions.css';
-import { db, auth } from './firebase';
+import { api } from './api';
 import { useNavigate } from 'react-router-dom';
-import { query, collection, addDoc, updateDoc, where, getDocs, getDoc } from 'firebase/firestore';
 import ArtworkSelection from './ArtworkSelection';
+import { useAuth } from './AuthContext';
 
 function CreateExhibition () {
-    const user = auth.currentUser;
+    const { user } = useAuth();
     const [exhibitionName, setExhibitionName] = useState('');
     const [exhibitionDescription, setExhibitionDescription] = useState('');
     const [selectedArtworks, setSelectedArtworks] = useState<string[]>([]);
@@ -17,48 +17,14 @@ function CreateExhibition () {
         console.log("Selected artworks for the exhibition:", selected);
     };
 
-    const fetchUser = async () => {
-        try {
-            const userDoc = query(collection(db, 'users'), where('uid', '==', user.uid));
-            const querySnapshot = await getDocs(userDoc);
-            if (querySnapshot.empty) {
-                console.error('User document does not exist:', user.uid);
-                return null;
-            }
-            const userDocRef = querySnapshot.docs[0].ref;
-            const userDocSnap = await getDoc(userDocRef);
-
-            if (userDocSnap.exists()) {
-                const userData = userDocSnap.data(); // Fetches the entire document data as an object
-                console.log("User data:", userData);
-                return userData;
-            }
-            else {
-                console.log("User Null");
-                return null;
-            }
-        } catch (error) {
-            console.error("Error fetching document:", error);
-            return null;
-        }
-    }
-
     const createExhibition = async () => {
-        const userData = await fetchUser();
-        if (userData) {
-            const docRef = await addDoc(collection(db, 'exhibitions'), {
-                uid: user.uid,
-                exhibitionName: exhibitionName,
-                artworks: selectedArtworks,
-                creator: userData.displayName,
-                description: exhibitionDescription,
-                createdAt: new Date(),
-            });
-            await updateDoc(docRef, {
-                exhibitionId: docRef.id,
-            })
-            navigate(`/exhibitions/${docRef.id}`)
-        }
+        if (!user) return;
+        const response = await api.post('/exhibitions', {
+            exhibitionName,
+            description: exhibitionDescription,
+            artworkIds: selectedArtworks,
+        });
+        navigate(`/exhibitions/${response.data.id}`);
     };
 
     return (

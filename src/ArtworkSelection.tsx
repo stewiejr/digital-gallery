@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from './firebase'; // assuming firebase.js initializes Firestore
-import { collection, getDocs } from 'firebase/firestore';
+import { api } from './api';
 import './ArtworkSelection.css';
 
 function ArtworkSelection({ onSelectionChange }) {
@@ -11,14 +10,8 @@ function ArtworkSelection({ onSelectionChange }) {
   // Fetch artworks on component load
   useEffect(() => {
     const fetchArtworks = async () => {
-        const querySnapshot = await getDocs(collection(db, 'artworks'));
-        const artworksData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          title: doc.data().title,   // Ensure these fields are correctly retrieved
-          imageUrl: doc.data().imageUrl,  // Ensure these fields exist in the document
-        })) as { id: string; title: string; imageUrl: string }[]; // Type assertion
-  
-        setArtworks(artworksData);
+        const response = await api.get('/artworks');
+        setArtworks(response.data);
       };
     fetchArtworks();
   }, []);

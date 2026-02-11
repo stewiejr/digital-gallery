@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth, browserLocalPersistence } from './firebase'; // Import your Firebase auth instance
-import { onAuthStateChanged, User } from 'firebase/auth';
-// Define the shape of the context data
+import { AuthUser, clearAuth, getStoredUser } from './api';
+
 interface AuthContextType {
-  user: User | null;
-  //name: string | null;
+  user: AuthUser | null;
   loading: boolean;
+  setUser: (user: AuthUser | null) => void;
+  logout: () => void;
 }
 
 // Create the AuthContext
@@ -13,28 +13,22 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Create the AuthProvider component
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setCurrentUser] = useState<User | null>(null);
+  const [user, setCurrentUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set local persistence for Firebase authentication
-    auth.setPersistence(browserLocalPersistence)
-      .then(() => {
-        // Listen for authentication state changes
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-          setCurrentUser(user); // Update user state based on auth changes
-          setLoading(false);
-        });
-        return () => unsubscribe(); // Clean up subscription on unmount
-      })
-      .catch((error) => {
-        console.error('Error setting persistence:', error);
-        setLoading(false);
-      });
+    const storedUser = getStoredUser();
+    setCurrentUser(storedUser);
+    setLoading(false);
   }, []);
 
+  const logout = () => {
+    clearAuth();
+    setCurrentUser(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={{ user, loading, setUser: setCurrentUser, logout }}>
       {loading ? <p>Loading...</p> : children}
     </AuthContext.Provider>
   );

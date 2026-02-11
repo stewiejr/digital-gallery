@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { auth, db } from './firebase.js';
-import { collection, addDoc, getDoc, getDocs, query, where, updateDoc } from 'firebase/firestore';  // Firestore methods
+import { api } from './api';
 import './Profile.css';
+import { useAuth } from './AuthContext';
 
 const Profile: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -14,45 +14,18 @@ const Profile: React.FC = () => {
     const [commentText, setCommentText] = useState("");
     const [loading, setLoading] = useState(true);
     const [notNull, setNotNull] = useState(true);
-    const user = auth.currentUser;
+    const { user } = useAuth();
 
     const fetchUserData = async () => {
         try {
-            const userId = id;
-            const userDoc = query(collection(db, 'users'), where('uid', '==', userId));
-            const querySnapshot = await getDocs(userDoc);
-            if (querySnapshot.empty) {
-                console.error('User document does not exist:', userId);
-                setNotNull(false);
-                return;
-            }
-            const userDocRef = querySnapshot.docs[0].ref;
-            const userDocSnap = await getDoc(userDocRef);
-
-            if (userDocSnap.exists()) {
-                const userData = userDocSnap.data(); // Fetches the entire document data as an object
-
-                // To access specific fields, use userData.fieldName
-                setName(userData.displayName); // Replace 'name' with the specific field name
-                setUsername(userData.username);
-                if (userData.profilePicture) {
-                    setProfilePicture(userData.profilePicture); // Set profile picture URL
-                } else {
-                    try {
-                        await updateDoc(userDocRef, {
-                            profilePicture: "https://i.imgur.com/Cx5PiKp.png", // Save the Imgur URL in Firestore
-                        });
-                        setProfilePicture("https://i.imgur.com/Cx5PiKp.png"); // Update the local state
-                    } catch (error) {
-                        console.error("Error updating profile picture:", error);
-                    }
-                }
-                fetchArtwork();
-                fetchComments(userDocRef);
-                return userData;
-            } else {
-                console.log("User Null");
-            }
+            const response = await api.get(`/users/${id}`);
+            const userData = response.data;
+            setName(userData.displayName);
+            setUsername(userData.username);
+            setProfilePicture(userData.profilePicture);
+            fetchArtwork();
+            fetchComments();
+            return userData;
         } catch (error) {
             console.error("Error fetching document:", error);
         } finally {
@@ -65,22 +38,18 @@ const Profile: React.FC = () => {
             console.error('No user ID provided for artwork');
             return;
         }
-        const artworkCollection = query(collection(db, 'artworks'), where('uid', '==', userId)) ;
-        const artworkSnapshot = await getDocs(artworkCollection);
-        const artworkData = artworkSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setArtwork(artworkData);
+        const response = await api.get(`/artworks/by-user/${userId}`);
+        setArtwork(response.data);
     };
 
-    const fetchComments = async (userDocRef) => {
+    const fetchComments = async () => {
         const userId = id;
         if (!userId) { // Check for undefined userId before fetching artwork
             console.error('No user ID provided for artwork');
             return;
         }
-        const commentsCollection = collection(db, 'users', userDocRef.id, 'comments');
-        const commentsSnapshot = await getDocs(commentsCollection);
-        const commentsData = commentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setComments(commentsData);
+        const response = await api.get(`/comments/users/${userId}`);
+        setComments(response.data);
     };
 
     const handleCommentSubmit = async (e: React.FormEvent) => {
@@ -91,41 +60,20 @@ const Profile: React.FC = () => {
         }    
 
         try {
-            const userDoc1 = query(collection(db, 'users'), where('uid', '==', id));
-            const userDoc2 = query(collection(db, 'users'), where('uid', '==', user.uid));
-            const querySnapshot1 = await getDocs(userDoc1);
-            if (querySnapshot1.empty) {
-                console.error('User document does not exist:', id);
+            if (!user) {
+                console.error('Not authenticated');
                 return;
             }
-            const querySnapshot2 = await getDocs(userDoc2);
-            if (querySnapshot2.empty) {
-                console.error('User document does not exist:', id);
-                return;
-            }
-            const userDocRef1 = querySnapshot1.docs[0].ref;
-            const commentsCollection = collection(db, 'users', userDocRef1.id, 'comments');
-            const userDocRef2 = querySnapshot2.docs[0].ref;
-            const userDocSnap2 = await getDoc(userDocRef2);
 
-            if (userDocSnap2.exists()) {
-                const userData = userDocSnap2.data(); // Fetches the entire document data as an object
-                console.log("User data:", userData);
-                await addDoc(commentsCollection, {
-                    uid: user.uid,
-                    name: user.displayName,
-                    username: userData.username,
-                    text: commentText,
-                    createdAt: new Date() // Optional: Add a timestamp
-                });
-            }
+            await api.post(`/comments/users/${id}`, {
+                text: commentText,
+            });
             // Reset form fields
             setCommentText('');
 
             // Refresh comments
-            const commentsSnapshot = await getDocs(commentsCollection);
-            const commentsData = commentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setComments(commentsData);
+            const response = await api.get(`/comments/users/${id}`);
+            setComments(response.data);
         } catch (error) {
             console.error('Error adding comment:', error);
         }
@@ -147,7 +95,7 @@ const Profile: React.FC = () => {
                 <img src={profilePicture} alt="Profile" className="profile-img" />
                 <h3>{name}</h3>
                 <p>@{username}</p>
-                {user.uid == id ? (
+                {user && user.id == id ? (
                     <>
                         <Link to="./profile-management" ><button type="button" className="button">Edit Profile</button></Link> <br /><br />
                     </>) : 
@@ -172,9 +120,9 @@ const Profile: React.FC = () => {
                 <div className="comments">
                     {comments.map((comment) => (
                         <div key={comment.id} className="comment">
-                            <Link to={`/profile/${comment.uid}`}> 
+                            <Link to={`/profile/${comment.authorId}`}> 
                                 <span>
-                                    <strong>{comment.name}@{comment.username}:</strong> 
+                                    <strong>{comment.authorName}@{comment.authorUsername}:</strong> 
                                 </span>
                             </Link>
                             <p>{comment.text}</p>

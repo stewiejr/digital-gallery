@@ -1,20 +1,20 @@
-// Gallery.tsx
 import React, { useState, useEffect } from 'react';
-import { db, auth } from './firebase';
-import { collection, getDocs, addDoc, where, query } from 'firebase/firestore';
+import { api } from './api';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import './Gallery.css';
+import { useAuth } from './AuthContext';
 
 interface Artwork {
   id: string;
   title: string;
   description: string;
   imageUrl: string;
-  artist: string;
-  uid: string;
+  artistName: string;
+  artistUsername: string;
+  artistId: string;
   createdAt: Date;
   price: number;
+  isSold: boolean;
 }
 
 const Gallery: React.FC = () => {
@@ -26,17 +26,14 @@ const Gallery: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [price, setPrice] = useState(0);
   const [error, setError] = useState('');
-  const clientId = import.meta.env.VITE_IMGUR_CLIENT_ID;
+
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchArtworks = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'artworks'));
-        const artworksData = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        } as Artwork
-      ));
+        const response = await api.get('/artworks');
+        const artworksData = response.data as Artwork[];
         setArtworks(artworksData);
       } catch (error) {
         console.error('Error fetching artwork data:', error);
@@ -57,71 +54,96 @@ const Gallery: React.FC = () => {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setLoading(true);
+    
     try {
-      const imageFileUrl = await handleArtworkUpload(); // Awaiting the returned image URL
-      if (!imageFileUrl) {
-        console.error('Failed to upload image.');
-        return;
-      }
-      const user = auth.currentUser;
-      const userId = user.uid;
-      const newArtwork = { title, description, imageUrl: imageFileUrl, artist: user.displayName, uid: userId, createdAt: new Date(), price: price };
-      const docRef = await addDoc(collection(db, 'artworks'), newArtwork);
-      const userDoc = query(collection(db, 'users'), where('uid', '==', user.uid));
-      const querySnapshot = await getDocs(userDoc);
-      if (querySnapshot.empty) {
-        console.error('User document does not exist:', userId);
-        setError('User document does not exist.');
+      if (!user) {
+        setError('You must be logged in to upload artwork.');
+        setLoading(false);
         return;
       }
 
-      const userDocRef = querySnapshot.docs[0].ref;
+      if (!file) {
+        setError('Please select an image file.');
+        setLoading(false);
+        return;
+      }
+
+      const imageFileUrl = await handleArtworkUpload();
+      if (!imageFileUrl) {
+        setError('Failed to upload image to Imgur.');
+        setLoading(false);
+        return;
+      }
+
+      const response = await api.post('/artworks', {
+        title,
+        description,
+        imageUrl: imageFileUrl,
+        price: price.toString(),
+      });
+
+      const savedArtwork = response.data as Artwork;
 
       setTitle('');
       setDescription('');
       setPrice(0);
-      const userArtworkRef = await addDoc(collection(userDocRef, 'artwork'), newArtwork);
-      console.log('Added artwork to user-specific artwork subcollection:', userArtworkRef.id);
+      setFile(null);
       setArtworks((prevArtworks) => [
+        savedArtwork,
         ...prevArtworks,
-        { id: docRef.id, ...newArtwork },
       ]);
 
-      console.log("Sent");
-    } catch (error) {
+      alert('Artwork uploaded successfully!');
+      setIsSidebarOpen(false);
+    } catch (error: any) {
       console.error('Error uploading artwork:', error);
+      setError(error.response?.data?.message || 'Error uploading artwork. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
   
-  const handleArtworkUpload = async () => {
-    if (!file) return;
+  const handleArtworkUpload = async (): Promise<string | undefined> => {
+    if (!file) {
+      setError('No file selected');
+      return undefined;
+    }
+
     const formData = new FormData();
     formData.append('image', file);
-      try {
-        // Make API call to Imgur
-        const response = await axios.post('https://api.imgur.com/3/upload', formData, {
-            headers: {
-                'Authorization': 'Client-ID ' + clientId,
-                'Content-Type': 'multipart/form-data',
-            },
-        });
+    
+    try {
+      // Upload to backend instead of Imgur
+      const response = await api.post('/upload/image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
-        const fileUrl = response.data.data.link; // Get the image URL from the response
-
-        return fileUrl;
-
-    } catch (error) {
-        console.error('An unexpected error occurred:', error);
-        setError("An unexpected error occurred.");
-      }
+      // Backend returns relative URL like "/uploads/filename.png"
+      // We'll store the full URL in the database
+      const relativeUrl = response.data.url; // "/uploads/filename.png"
+      const fullUrl = `http://localhost:8080${relativeUrl}`;
+      
+      console.log('Image uploaded, URL:', fullUrl);
+      return fullUrl;
+    } catch (error: any) {
+      console.error('Backend upload error:', error.response?.data || error);
+      setError('Failed to upload image: ' + (error.response?.data?.error || error.message));
+      return undefined;
+    }
   };
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const handleFileChange = (event) => {
-    setFile(event.target.files[0]);
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setFile(event.target.files[0]);
+    }
   };
 
   return (
@@ -141,9 +163,14 @@ const Gallery: React.FC = () => {
                     alt={artwork.title}
                     className="artwork-image"
                   />
+                  {artwork.isSold && (
+                    <div className="sold-overlay">
+                      <span className="sold-badge">SOLD</span>
+                    </div>
+                  )}
                 </div>
                 <h2 className="artwork-title">{artwork.title}</h2>
-                <p className="artwork-artist">By: {artwork.artist}</p>
+                <p className="artwork-artist">By: {artwork.artistName}</p>
               </Link>
             </div>
           ))}
@@ -153,6 +180,7 @@ const Gallery: React.FC = () => {
       {/* Sidebar for the upload form */}
       <div className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <h2>Upload New Artwork</h2>
+        {error && <p style={{ color: 'red', marginBottom: '10px' }}>{error}</p>}
         <form onSubmit={handleUpload} className="upload-form">
           <input
             type="text"
@@ -160,23 +188,36 @@ const Gallery: React.FC = () => {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
+            disabled={loading}
           />
           <textarea
             placeholder="Artwork Description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             required
+            disabled={loading}
           />
           Price:
           <input
             type="number"
+            step="0.01"
             placeholder="Price"
-            value={price.toFixed(2)}
+            value={price}
             onChange={handlePriceChange}
             required
+            disabled={loading}
           />
-          <input type="file" onChange={handleFileChange} required/>
-          <button type="submit">Upload Artwork</button>
+          <input 
+            type="file" 
+            accept="image/*"
+            onChange={handleFileChange} 
+            required
+            disabled={loading}
+          />
+          {file && <p style={{ fontSize: '12px', marginTop: '5px' }}>Selected: {file.name}</p>}
+          <button type="submit" disabled={loading}>
+            {loading ? 'Uploading...' : 'Upload Artwork'}
+          </button>
         </form>
       </div>
 

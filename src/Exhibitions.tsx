@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import './Exhibitions.css';
-import { db } from './firebase.js';
-import { collection, getDocs, getDoc, doc as firestoreDoc } from 'firebase/firestore';
 import ArtworkSelection from './ArtworkSelection';
+import { api } from './api';
 
 const Exhibitions: React.FC = () => {
     const [exhibitions, setExhibitions] = useState<any[]>([]);
@@ -13,9 +12,9 @@ const Exhibitions: React.FC = () => {
     interface ExhibitionData {
         id: string;
         exhibitionName: string;
-        creator: string;
+        creatorName: string;
         description?: string;
-        artworks?: string[];
+        artworkIds?: string[];
         firstArtwork?: {
             title: string;
             imageUrl: string;
@@ -25,19 +24,16 @@ const Exhibitions: React.FC = () => {
     // Fetch exhibitions from Firestore
     const fetchExhibitions = async () => {
         try {
-            const exhibitionCollectionRef = collection(db, 'exhibitions');
-            const exhibitionSnapshot = await getDocs(exhibitionCollectionRef);
+            const exhibitionResponse = await api.get('/exhibitions');
             const exhibitionList = await Promise.all(
-                exhibitionSnapshot.docs.map(async (snapshot) => {
-                    const exhibitionData = snapshot.data() as ExhibitionData;
-                    exhibitionData.id = snapshot.id;
-                    const firstArtworkId = exhibitionData.artworks?.[0];
-                    
+                (exhibitionResponse.data as ExhibitionData[]).map(async (exhibitionData) => {
+                    const firstArtworkId = exhibitionData.artworkIds?.[0];
                     if (firstArtworkId) {
-                        const artworkDoc = await getDoc(firestoreDoc(db, 'artworks', firstArtworkId));
-                        if (artworkDoc.exists()) {
-                            exhibitionData.firstArtwork = artworkDoc.data() as { title: string; imageUrl: string };
-                        }
+                        const artworkResponse = await api.get(`/artworks/${firstArtworkId}`);
+                        exhibitionData.firstArtwork = {
+                            title: artworkResponse.data.title,
+                            imageUrl: artworkResponse.data.imageUrl,
+                        };
                     }
                     return exhibitionData;
                 })
@@ -68,12 +64,14 @@ const Exhibitions: React.FC = () => {
             <Link to="create" className="exhibition-link"><button type="button" className="button">Create Exhibition</button></Link> <br /> <br />
             <div className="exhibition-list">
                 {exhibitions.map((exhibition) => (
-                    <Link to={`/exhibitions/${exhibition.exhibitionId}`}>
+                    <Link to={`/exhibitions/${exhibition.id}`}>
                         <div className="exhibition-item" key={exhibition.id}>
                             <h4>{exhibition.exhibitionName}</h4>
-                            <p>Creator: {exhibition.creator}</p>
+                            <p>Creator: {exhibition.creatorName}</p>
                             <p>Description: {exhibition.description}</p>     
-                                <img src={exhibition.firstArtwork.imageUrl} alt={exhibition.firstArtwork.title} className="first-artwork" />
+                                {exhibition.firstArtwork && (
+                                    <img src={exhibition.firstArtwork.imageUrl} alt={exhibition.firstArtwork.title} className="first-artwork" />
+                                )}
                         </div>
                     </Link>
                 ))}

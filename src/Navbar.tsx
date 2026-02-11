@@ -1,15 +1,14 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import { auth } from './firebase';
 
 const Navbar: React.FC = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     try {
-      await auth.signOut();
+      logout();
       navigate('/login'); // Redirect to login after logout
     } catch (error) {
       console.error("Error logging out:", error);

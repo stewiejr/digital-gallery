@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from './firebase.js';  // If it's directly in the src folder.
-import { collection, getDocs, query, where } from 'firebase/firestore';  // Import Firestore methods
 import { Link, useNavigate } from 'react-router-dom';  // Import Link and useNavigate from react-router-dom
 import Exhibitions from './Exhibitions'
 import './Homepage.css';  // Import the CSS file
+import { useAuth } from './AuthContext';
 
 function Homepage() {
     const [scrollText, setScrollText] = useState("Welcome to the Digital Art Gallery");
     const [isScrolled, setIsScrolled] = useState(false);
     const navigate = useNavigate();
-    const user = auth.currentUser;
+    const { user } = useAuth();
     const fetchUserData = async () => {
         if (user) {
             navigate('/dashboard');

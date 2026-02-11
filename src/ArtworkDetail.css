@@ -63,6 +63,21 @@ form button:hover {
     background-color: #15837d;
 }
 
+.delete-artwork-button {
+    margin-top: 12px;
+    background-color: #dc3545;
+    color: #ffffff;
+    cursor: pointer;
+    border: none;
+    font-weight: bold;
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+.delete-artwork-button:hover {
+    background-color: #b02a37;
+}
+
 .profile-artist {
     height: 50px !important;
     width: 50px !important;

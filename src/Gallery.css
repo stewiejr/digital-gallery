@@ -48,10 +48,35 @@ body {
     justify-content: center;
     background-color: #cfcfcf;
     transition: transform 0.3s ease; /* Smooth transition for scaling */
+    position: relative;
 }
 
 .gallery-item:hover {
     transform: scale(1.05); /* Scales the item by 5% on hover */
+}
+
+.sold-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.sold-badge {
+    background-color: #dc3545;
+    color: white;
+    padding: 12px 24px;
+    font-size: 24px;
+    font-weight: bold;
+    border-radius: 4px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    letter-spacing: 2px;
 }
 
 .artwork-image {

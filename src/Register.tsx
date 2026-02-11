@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import { db, auth } from './firebase.js';  // If it's directly in the src folder.
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';  // Import Firestore methods
-import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail, updateProfile } from 'firebase/auth';
-import { FirebaseError } from 'firebase/app';
+import { api, setAuth } from './api';
+import { useAuth } from './AuthContext';
 import { useNavigate } from 'react-router-dom';
 import './Register.css';  // Import the CSS file
 
@@ -14,47 +12,21 @@ function Register() {
   const [successMessage, setSuccessMessage] = useState(''); // State for success message
   const [errorMessage, setErrorMessage] = useState(''); // State for error message
   const navigate = useNavigate();
+  const { setUser } = useAuth();
 
   // Function to handle user registration
   const handleRegister = async () => {
     try {
-      const signInMethods = await fetchSignInMethodsForEmail(auth, email);
-      if (signInMethods.length > 0) {
-        setErrorMessage('Email already exists');
-        return;
-      }
-      // Check if the username already exists
-      const q = query(collection(db, 'users'), where('username', '==', username));
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-        // If username already exists, set error message
-        setErrorMessage('Username Already Exists');
-        return;
-      }
-
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      try {
-        await updateProfile(user, {
-          displayName: displayName,
-        });
-      } catch (error) {
-        console.error('Error setting display name:', error);
-        setErrorMessage('Could not set display name. Please try again.');
-        return; // Exit if update fails
-      }
-
-      // Save user data to Firestore (username and password)
-      await addDoc(collection(db, 'users'), {
-        uid: user.uid,
-        email: email,
-        displayName: displayName,
-        username: username,
-        password: password,  // Store password directly
-        createdAt: new Date(),
+      const response = await api.post('/auth/register', {
+        email,
+        displayName,
+        username,
+        password,
       });
+
+      const { token, user } = response.data;
+      setAuth(token, user);
+      setUser(user);
 
       setSuccessMessage('User account successfully created!'); // Set success message
       setErrorMessage(''); // Clear error message
@@ -64,19 +36,11 @@ function Register() {
       setPassword(''); // Clear input fields
 
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving user data:', error);
-      if (error instanceof FirebaseError) {
-        // Handle specific Firebase errors
-        if (error.code === 'auth/weak-password') {
-          setErrorMessage('Password should be at least 6 characters.');
-        } else if (error.code === 'auth/email-already-in-use') {
-          setErrorMessage('Email already exists'); // Specific error for email
-        } else {
-          setErrorMessage('Error creating account. Please try again.');
-        }
+      if (error?.response?.status === 409) {
+        setErrorMessage(error.response?.data?.message || 'Email or username already exists.');
       } else {
-        // Handle any other errors
         setErrorMessage('An unexpected error occurred. Please try again.');
       }
     }

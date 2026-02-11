@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { db } from './firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { api } from './api';
 import './Search.css'; // Import the CSS file for styling
 
 const Search: React.FC = () => {
@@ -25,12 +24,8 @@ const Search: React.FC = () => {
       }
       const lowerCaseSearch = searchTermArtwork.toLowerCase();
       try {
-          const q = collection(db, 'artworks');
-          const querySnapshot = await getDocs(q);
-          const searchResults = querySnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as { id: string; title: string; imageUrl: string }))
-            .filter(doc => doc.title.toLowerCase().includes(lowerCaseSearch));
-          setResultArtwork(searchResults);
+          const response = await api.get('/artworks/search', { params: { q: lowerCaseSearch } });
+          setResultArtwork(response.data);
       } catch (error) {
           console.error('Error fetching search results:', error);
       }
@@ -43,14 +38,8 @@ const Search: React.FC = () => {
     }
     const lowerCaseSearch = searchTermUser.toLowerCase();
     try {
-        const q = collection(db, 'users');
-        const querySnapshot = await getDocs(q);
-        const searchResults = querySnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as { id: string; displayName: string; username: string }))
-          .filter(doc => 
-            (doc.displayName?.toLowerCase().includes(lowerCaseSearch)) ||
-            (doc.username?.toLowerCase().includes(lowerCaseSearch)));
-        setResultUser(searchResults);
+        const response = await api.get('/users/search', { params: { q: lowerCaseSearch } });
+        setResultUser(response.data);
     } catch (error) {
         console.error('Error fetching search results:', error);
     }
@@ -102,7 +91,7 @@ const Search: React.FC = () => {
           />
           {resultUser.map(result => (
               <div key={result.id}>
-                  <Link to={`/profile/${result.uid}`}> 
+                  <Link to={`/profile/${result.id}`}> 
                     <>
                       <strong>{result.displayName}@{result.username}</strong>
                     </>
